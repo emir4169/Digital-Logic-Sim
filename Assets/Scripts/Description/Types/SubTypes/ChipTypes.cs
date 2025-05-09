@@ -8,6 +8,7 @@ namespace DLS.Description
 		Nand,
 		TriStateBuffer,
 		Clock,
+		Pulse,
 
 		// ---- Memory ----
 		dev_Ram_8Bit,
@@ -114,5 +115,9 @@ namespace DLS.Description
 		BusTerminus_64Bit,
    	BusTerminus_128Bit,
    	BusTerminus_256Bit,
+		
+		// ---- Audio ----
+		Buzzer
+
 	}
 }

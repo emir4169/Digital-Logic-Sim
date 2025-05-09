@@ -1,5 +1,6 @@
 using System;
 using DLS.Description;
+using DLS.Simulation;
 using Seb.Helpers;
 using Seb.Types;
 using UnityEngine;
@@ -103,7 +104,7 @@ namespace DLS.Game
 
 		public int GetStateDecimalDisplayValue()
 		{
-			uint rawValue = Pin.State.GetRawBits();
+			uint rawValue = PinState.GetBitStates(Pin.State);
 			int displayValue = (int)rawValue;
 
 			if (pinValueDisplayMode == PinValueDisplayMode.SignedDecimal)
@@ -134,7 +135,7 @@ namespace DLS.Game
 
 		public void ToggleState(int bitIndex)
 		{
-			Pin.State.Toggle(bitIndex);
+			PinState.Toggle(ref Pin.PlayerInputState, bitIndex);
 		}
 
 		public bool PointIsInInteractionBounds(Vector2 point) => PointIsInHandleBounds(point) || PointIsInStateIndicatorBounds(point);

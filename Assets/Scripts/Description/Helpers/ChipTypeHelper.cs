@@ -12,6 +12,7 @@ namespace DLS.Description
 			// ---- Basic Chips ----
 			{ ChipType.Nand, "NAND" },
 			{ ChipType.Clock, "CLOCK" },
+			{ ChipType.Pulse, "PULSE" },
 			{ ChipType.TriStateBuffer, "3-STATE BUFFER" },
 			// ---- Memory ----
 			{ ChipType.dev_Ram_8Bit, "dev.RAM-8" },
@@ -78,6 +79,8 @@ namespace DLS.Description
 			{ ChipType.DisplayDot, "DOT DISPLAY" },
 			{ ChipType.SevenSegmentDisplay, "7-SEGMENT" },
 			{ ChipType.DisplayLED, "LED" },
+
+			{ ChipType.Buzzer, "BUZZER" },
 
 			// ---- Not really chips (but convenient to treat them as such anyway) ----
 

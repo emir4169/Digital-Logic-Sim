@@ -16,7 +16,8 @@ namespace DLS.Game
 
 		// Pin may be attached to a chip or a devPin as its parent
 		public readonly IMoveable parent;
-		public readonly PinState State;
+		public uint State; // sim state
+		public uint PlayerInputState; // dev input pins only
 		public PinColour Colour;
 		bool faceRight;
 		public float LocalPosY;
@@ -30,11 +31,11 @@ namespace DLS.Game
 			Name = desc.Name;
 			Address = address;
 			IsSourcePin = isSourcePin;
-			State = new PinState((int)bitCount);
 			Colour = desc.Colour;
 
 			IsBusPin = parent is SubChipInstance subchip && subchip.IsBus;
 			faceRight = isSourcePin;
+			PinState.SetAllDisconnected(ref State);
 		}
 
 		public Vector2 ForwardDir => faceRight ? Vector2.right : Vector2.left;
@@ -67,17 +68,14 @@ namespace DLS.Game
 		public Color GetColLow() => DrawSettings.ActiveTheme.StateLowCol[(int)Colour];
 		public Color GetColHigh() => DrawSettings.ActiveTheme.StateHighCol[(int)Colour];
 
-		public Color GetStateCol(int bitIndex, bool hover = false)
+		public Color GetStateCol(int bitIndex, bool hover = false, bool canUsePlayerState = true)
 		{
-			uint state = State.GetBit(bitIndex);
-			int colIndex = (int)Colour;
+			uint pinState = (IsSourcePin && canUsePlayerState) ? PlayerInputState : State; // dev input pin uses player state (so it updates even when sim is paused)
+			uint state = PinState.GetBitTristatedValue(pinState, bitIndex);
 
-			return state switch
-			{
-				PinState.LogicHigh => DrawSettings.ActiveTheme.StateHighCol[colIndex],
-				PinState.LogicLow => hover ? DrawSettings.ActiveTheme.StateHoverCol[colIndex] : DrawSettings.ActiveTheme.StateLowCol[colIndex],
-				_ => DrawSettings.ActiveTheme.StateDisconnectedCol
-			};
+			if (state == PinState.LogicDisconnected) return DrawSettings.ActiveTheme.StateDisconnectedCol;
+			return DrawSettings.GetStateColour(state == PinState.LogicHigh, (uint)Colour, hover);
+			
 		}
 	}
 }
