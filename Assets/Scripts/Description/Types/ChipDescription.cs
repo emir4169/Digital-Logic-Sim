@@ -5,11 +5,12 @@ namespace DLS.Description
 {
 	public class ChipDescription
 	{
-		// ---- Name Comparion ----
+		// ---- Name Comparison ----
 		public const StringComparison NameComparison = StringComparison.OrdinalIgnoreCase;
 		public static readonly StringComparer NameComparer = StringComparer.OrdinalIgnoreCase;
 
 		// ---- Data ----
+		public string DLSVersion;
 		public string Name;
 		public NameDisplayLocation NameLocation;
 		public ChipType ChipType;

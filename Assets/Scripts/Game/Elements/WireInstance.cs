@@ -206,16 +206,9 @@ namespace DLS.Game
 
 		public void SetWirePointWithSnapping(Vector2 p, int i, Vector2 straightLineRefPoint)
 		{
-			bool snapToGrid = KeyboardShortcuts.SnapModeHeld;
-			bool forceStraightLine = KeyboardShortcuts.StraightLineModeHeld;
-
-			if (snapToGrid) p = GridHelper.SnapToGrid(p, true, true);
-
-			if (forceStraightLine)
-			{
-				p = GridHelper.ForceStraightLine(straightLineRefPoint, p);
-			}
-
+			if (Project.ActiveProject.ShouldSnapToGrid) p = GridHelper.SnapToGrid(p, true, true);
+			if (Project.ActiveProject.ForceStraightWires) p = GridHelper.ForceStraightLine(straightLineRefPoint, p);
+			
 			SetWirePoint(p, i);
 		}
 
@@ -319,8 +312,7 @@ namespace DLS.Game
 
 		public Color GetColour(int bitIndex)
 		{
-			Color col = IsFullyConnected ? SourcePin.GetStateCol(bitIndex) : DrawSettings.ActiveTheme.StateDisconnectedCol;
-
+			Color col = IsFullyConnected ? SourcePin.GetStateCol(bitIndex, false, false) : DrawSettings.ActiveTheme.StateDisconnectedCol;
 
 			if (bitCount != PinBitCount.Bit1 && bitIndex % 2 == 0)
 			{

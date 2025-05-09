@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using DLS.Description;
 using DLS.Graphics;
+using DLS.SaveSystem;
 using Seb.Helpers;
 using Seb.Types;
 using UnityEngine;
@@ -49,8 +50,12 @@ namespace DLS.Game
 			// Displays
 			Displays = CreateDisplayInstances(description);
 
-			// Load internal data
-			if (subChipDesc.InternalData != null)
+			// Load internal data (or create default in case missing)
+			if (subChipDesc.InternalData == null || subChipDesc.InternalData.Length == 0)
+			{
+				InternalData = DescriptionCreator.CreateDefaultInstanceData(description.ChipType);
+			}
+			else
 			{
 				InternalData = new uint[subChipDesc.InternalData.Length];
 				Array.Copy(subChipDesc.InternalData, InternalData, InternalData.Length);
@@ -306,6 +311,9 @@ namespace DLS.Game
 				PinBitCount.Bit8 => DrawSettings.PinHeight8Bit,
 				PinBitCount.Bit16 => DrawSettings.PinHeight16Bit,
 				PinBitCount.Bit32 => DrawSettings.PinHeight32Bit,
+				PinBitCount.Bit64 => DrawSettings.PinHeight64Bit,
+				PinBitCount.Bit128 => DrawSettings.PinHeight128Bit,
+				PinBitCount.Bit256 => DrawSettings.PinHeight256Bit,
 				_ => throw new Exception("Bit count not implemented " + bitCount)
 			};
 		}

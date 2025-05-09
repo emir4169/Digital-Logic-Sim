@@ -1,8 +1,8 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using DLS.Description;
 using DLS.Game;
-using UnityEngine;
 using Random = System.Random;
 
 namespace DLS.Simulation
@@ -10,6 +10,7 @@ namespace DLS.Simulation
 	public static class Simulator
 	{
 		public static readonly Random rng = new();
+		static readonly Stopwatch stopwatch = Stopwatch.StartNew();
 		public static int stepsPerClockTransition;
 		public static int simulationFrame;
 		static uint pcg_rngState;
@@ -21,15 +22,12 @@ namespace DLS.Simulation
 		public static bool canDynamicReorderThisFrame;
 
 		static SimChip prevRootSimChip;
+		static double elapsedSecondsOld;
+		static double deltaTime;
+		static SimAudio audioState;
 
 		// Modifications to the sim are made from the main thread, but only applied on the sim thread to avoid conflicts
-		static readonly Queue<SimModifyCommand> modificationQueue = new();
-
-		public static void UpdateKeyboardInputFromMainThread()
-		{
-			SimKeyboardHelper.RefreshInputState();
-		}
-
+		static readonly ConcurrentQueue<SimModifyCommand> modificationQueue = new();
 
 		// ---- Simulation outline ----
 		// 1) Forward the initial player-controlled input states to all connected pins.
@@ -47,8 +45,11 @@ namespace DLS.Simulation
 		//   (would have to make exception for chips containing things like clock or key chip, which can activate 'spontaneously')
 		// * Create simplified connections network allowing only builtin chips to be processed during simulation
 
-		public static void RunSimulationStep(SimChip rootSimChip, DevPinInstance[] inputPins)
+		public static void RunSimulationStep(SimChip rootSimChip, DevPinInstance[] inputPins, SimAudio audioState)
 		{
+			Simulator.audioState = audioState;
+			audioState.InitFrame();
+
 			if (rootSimChip != prevRootSimChip)
 			{
 				needsOrderPass = true;
@@ -65,7 +66,9 @@ namespace DLS.Simulation
 				try
 				{
 					SimPin simPin = rootSimChip.GetSimPinFromAddress(input.Pin.Address);
-					simPin.State.SetFromSource(input.Pin.State);
+					PinState.Set(ref simPin.State, input.Pin.PlayerInputState);
+
+					input.Pin.State = input.Pin.PlayerInputState;
 				}
 				catch (Exception)
 				{
@@ -83,6 +86,26 @@ namespace DLS.Simulation
 			{
 				StepChip(rootSimChip);
 			}
+
+			UpdateAudioState();
+		}
+
+		public static void UpdateInPausedState()
+		{
+			if (audioState != null)
+			{
+				audioState.InitFrame();
+				UpdateAudioState();
+			}
+		}
+
+		static void UpdateAudioState()
+		{
+			double elapsedSeconds = stopwatch.Elapsed.TotalSeconds;
+			if (simulationFrame <= 1) deltaTime = 0;
+			else deltaTime = elapsedSeconds - elapsedSecondsOld;
+			elapsedSecondsOld = stopwatch.Elapsed.TotalSeconds;
+			audioState.NotifyAllNotesRegistered(deltaTime);
 		}
 
 		// Recursively propagate signals through this chip and its subchips
@@ -187,6 +210,11 @@ namespace DLS.Simulation
 			return nextSubChipIndex;
 		}
 
+		public static void UpdateKeyboardInputFromMainThread()
+		{
+			SimKeyboardHelper.RefreshInputState();
+		}
+
 		public static bool RandomBool()
 		{
 			pcg_rngState = pcg_rngState * 747796405 + 2891336453;
@@ -202,53 +230,89 @@ namespace DLS.Simulation
 				// ---- Process Built-in chips ----
 				case ChipType.Nand:
 				{
-					uint andOp = chip.InputPins[0].State.GetRawBits() & chip.InputPins[1].State.GetRawBits();
-					uint nandOp = ~andOp & 1;
-					chip.OutputPins[0].State.SetBit(0, nandOp);
+					uint nandOp = 1 ^ (chip.InputPins[0].State & chip.InputPins[1].State);
+					chip.OutputPins[0].State = (ushort)(nandOp & 1);
 					break;
 				}
 				case ChipType.Clock:
 				{
 					bool high = stepsPerClockTransition != 0 && ((simulationFrame / stepsPerClockTransition) & 1) == 0;
-					chip.OutputPins[0].State.SetBit(0, high ? PinState.LogicHigh : PinState.LogicLow);
+					PinState.Set(ref chip.OutputPins[0].State, high ? PinState.LogicHigh : PinState.LogicLow);
+					break;
+				}
+				case ChipType.Pulse:
+				{
+					const int pulseDurationIndex = 0;
+					const int pulseTicksRemainingIndex = 1;
+					const int pulseInputOldIndex = 2;
+
+					uint inputState = chip.InputPins[0].State;
+					bool pulseInputHigh = PinState.FirstBitHigh(inputState);
+					uint pulseTicksRemaining = chip.InternalState[pulseTicksRemainingIndex];
+
+					if (pulseTicksRemaining == 0)
+					{
+						bool isRisingEdge = pulseInputHigh && chip.InternalState[pulseInputOldIndex] == 0;
+						if (isRisingEdge)
+						{
+							pulseTicksRemaining = chip.InternalState[pulseDurationIndex];
+							chip.InternalState[pulseTicksRemainingIndex] = pulseTicksRemaining;
+						}
+					}
+
+					uint outputState = PinState.LogicLow;
+					if (pulseTicksRemaining > 0)
+					{
+						chip.InternalState[1]--;
+						outputState = PinState.LogicHigh;
+					}
+					else if (PinState.GetTristateFlags(inputState) != 0)
+					{
+						PinState.SetAllDisconnected(ref outputState);
+					}
+
+					chip.OutputPins[0].State = outputState;
+					chip.InternalState[pulseInputOldIndex] = pulseInputHigh ? 1u : 0;
+
 					break;
 				}
 				case ChipType.Split_4To1Bit:
 				{
-					SimPin in4 = chip.InputPins[0];
-
-					for (int i = 0; i < 4; i++)
-					{
-						chip.OutputPins[i].State.SetBit(0, in4.State.GetBit(3 - i));
-					}
-
+					uint inState4Bit = chip.InputPins[0].State;
+					chip.OutputPins[0].State = (inState4Bit >> 3) & PinState.SingleBitMask;
+					chip.OutputPins[1].State = (inState4Bit >> 2) & PinState.SingleBitMask;
+					chip.OutputPins[2].State = (inState4Bit >> 1) & PinState.SingleBitMask;
+					chip.OutputPins[3].State = (inState4Bit >> 0) & PinState.SingleBitMask;
 					break;
 				}
 				case ChipType.Merge_1To4Bit:
 				{
-					SimPin out4 = chip.OutputPins[0];
-
-					for (int i = 0; i < 4; i++)
-					{
-						uint inputState = chip.InputPins[3 - i].State.GetBit(0);
-						out4.State.SetBit(i, inputState);
-					}
-
+					uint stateA = chip.InputPins[3].State & PinState.SingleBitMask; // lsb
+					uint stateB = chip.InputPins[2].State & PinState.SingleBitMask;
+					uint stateC = chip.InputPins[1].State & PinState.SingleBitMask;
+					uint stateD = chip.InputPins[0].State & PinState.SingleBitMask;
+					chip.OutputPins[0].State = stateA | stateB << 1 | stateC << 2 | stateD << 3;
 					break;
 				}
 				case ChipType.Merge_1To8Bit:
-					for (int i = 0; i < 8; i++)
-					{
-						chip.OutputPins[0].State.SetBit(i, chip.InputPins[7 - i].State.GetBit(0));
-					}
-
+				{
+					uint stateA = chip.InputPins[7].State & PinState.SingleBitMask; // lsb
+					uint stateB = chip.InputPins[6].State & PinState.SingleBitMask;
+					uint stateC = chip.InputPins[5].State & PinState.SingleBitMask;
+					uint stateD = chip.InputPins[4].State & PinState.SingleBitMask;
+					uint stateE = chip.InputPins[3].State & PinState.SingleBitMask;
+					uint stateF = chip.InputPins[2].State & PinState.SingleBitMask;
+					uint stateG = chip.InputPins[1].State & PinState.SingleBitMask;
+					uint stateH = chip.InputPins[0].State & PinState.SingleBitMask;
+					chip.OutputPins[0].State = stateA | stateB << 1 | stateC << 2 | stateD << 3 | stateE << 4 | stateF << 5 | stateG << 6 | stateH << 7;
 					break;
+				}
 				case ChipType.Merge_4To8Bit:
 				{
 					SimPin in4A = chip.InputPins[0];
 					SimPin in4B = chip.InputPins[1];
 					SimPin out8 = chip.OutputPins[0];
-					out8.State.Set8BitFrom4BitSources(in4B.State, in4A.State);
+					PinState.Set8BitFrom4BitSources(ref out8.State, in4B.State, in4A.State);
 					break;
 				}
 				case ChipType.Split_8To4Bit:
@@ -256,17 +320,23 @@ namespace DLS.Simulation
 					SimPin in8 = chip.InputPins[0];
 					SimPin out4A = chip.OutputPins[0];
 					SimPin out4B = chip.OutputPins[1];
-					out4A.State.Set4BitFrom8BitSource(in8.State, false);
-					out4B.State.Set4BitFrom8BitSource(in8.State, true);
+					PinState.Set4BitFrom8BitSource(ref out4A.State, in8.State, false);
+					PinState.Set4BitFrom8BitSource(ref out4B.State, in8.State, true);
 					break;
 				}
 				case ChipType.Split_8To1Bit:
-					for (int i = 0; i < 8; i++)
-					{
-						chip.OutputPins[i].State.SetBit(0, chip.InputPins[0].State.GetBit(7 - i));
-					}
-
+				{
+					uint in8 = chip.InputPins[0].State;
+					chip.OutputPins[0].State = (in8 >> 7) & PinState.SingleBitMask;
+					chip.OutputPins[1].State = (in8 >> 6) & PinState.SingleBitMask;
+					chip.OutputPins[2].State = (in8 >> 5) & PinState.SingleBitMask;
+					chip.OutputPins[3].State = (in8 >> 4) & PinState.SingleBitMask;
+					chip.OutputPins[4].State = (in8 >> 3) & PinState.SingleBitMask;
+					chip.OutputPins[5].State = (in8 >> 2) & PinState.SingleBitMask;
+					chip.OutputPins[6].State = (in8 >> 1) & PinState.SingleBitMask;
+					chip.OutputPins[7].State = (in8 >> 0) & PinState.SingleBitMask;
 					break;
+				}
 				case ChipType.Merge_1To16Bit:
 					for (int i = 0; i < 16; i++)
 					{
@@ -376,44 +446,38 @@ namespace DLS.Simulation
 					SimPin enablePin = chip.InputPins[1];
 					SimPin outputPin = chip.OutputPins[0];
 
-					if (enablePin.FirstBitHigh)
-					{
-						outputPin.State.SetFromSource(dataPin.State);
-					}
-					else
-					{
-						outputPin.State.SetBit(0, PinState.LogicDisconnected);
-					}
+					if (PinState.FirstBitHigh(enablePin.State)) outputPin.State = dataPin.State;
+					else PinState.SetAllDisconnected(ref outputPin.State);
 
 					break;
 				}
 				case ChipType.Key:
 				{
 					bool isHeld = SimKeyboardHelper.KeyIsHeld((char)chip.InternalState[0]);
-					chip.OutputPins[0].State.SetBit(0, isHeld ? PinState.LogicHigh : PinState.LogicLow);
+					chip.OutputPins[0].State = isHeld ? PinState.LogicHigh : PinState.LogicLow;
 					break;
 				}
 				case ChipType.DisplayRGB:
 				{
 					const uint addressSpace = 256;
-					PinState addressPin = chip.InputPins[0].State;
-					PinState redPin = chip.InputPins[1].State;
-					PinState greenPin = chip.InputPins[2].State;
-					PinState bluePin = chip.InputPins[3].State;
-					PinState resetPin = chip.InputPins[4].State;
-					PinState writePin = chip.InputPins[5].State;
-					PinState refreshPin = chip.InputPins[6].State;
-					PinState clockPin = chip.InputPins[7].State;
+					uint addressPin = chip.InputPins[0].State;
+					uint redPin = chip.InputPins[1].State;
+					uint greenPin = chip.InputPins[2].State;
+					uint bluePin = chip.InputPins[3].State;
+					uint resetPin = chip.InputPins[4].State;
+					uint writePin = chip.InputPins[5].State;
+					uint refreshPin = chip.InputPins[6].State;
+					uint clockPin = chip.InputPins[7].State;
 
 					// Detect clock rising edge
-					bool clockHigh = clockPin.FirstBitHigh();
+					bool clockHigh = PinState.FirstBitHigh(clockPin);
 					bool isRisingEdge = clockHigh && chip.InternalState[^1] == 0;
 					chip.InternalState[^1] = clockHigh ? 1u : 0;
 
 					if (isRisingEdge)
 					{
 						// Clear back buffer
-						if (resetPin.FirstBitHigh())
+						if (PinState.FirstBitHigh(resetPin))
 						{
 							for (int i = 0; i < addressSpace; i++)
 							{
@@ -421,15 +485,15 @@ namespace DLS.Simulation
 							}
 						}
 						// Write to back-buffer
-						else if (writePin.FirstBitHigh())
+						else if (PinState.FirstBitHigh(writePin))
 						{
-							uint addressIndex = addressPin.GetRawBits() + addressSpace;
-							uint data = redPin.GetRawBits() | (greenPin.GetRawBits() << 4) | (bluePin.GetRawBits() << 8);
+							uint addressIndex = PinState.GetBitStates(addressPin) + addressSpace;
+							uint data = (uint)(PinState.GetBitStates(redPin) | (PinState.GetBitStates(greenPin) << 4) | (PinState.GetBitStates(bluePin) << 8));
 							chip.InternalState[addressIndex] = data;
 						}
 
 						// Copy back-buffer to display buffer
-						if (refreshPin.FirstBitHigh())
+						if (PinState.FirstBitHigh(refreshPin))
 						{
 							for (int i = 0; i < addressSpace; i++)
 							{
@@ -439,32 +503,32 @@ namespace DLS.Simulation
 					}
 
 					// Output current pixel colour
-					uint colData = chip.InternalState[addressPin.GetRawBits()];
-					chip.OutputPins[0].State.SetAllBits_NoneDisconnected((colData >> 0) & 0b1111); // red
-					chip.OutputPins[1].State.SetAllBits_NoneDisconnected((colData >> 4) & 0b1111); // green
-					chip.OutputPins[2].State.SetAllBits_NoneDisconnected((colData >> 8) & 0b1111); // blue
+					uint colData = chip.InternalState[PinState.GetBitStates(addressPin)];
+					chip.OutputPins[0].State = (ushort)((colData >> 0) & 0b1111); // red
+					chip.OutputPins[1].State = (ushort)((colData >> 4) & 0b1111); // green
+					chip.OutputPins[2].State = (ushort)((colData >> 8) & 0b1111); // blue
 
 					break;
 				}
 				case ChipType.DisplayDot:
 				{
 					const uint addressSpace = 256;
-					PinState addressPin = chip.InputPins[0].State;
-					PinState pixelInputPin = chip.InputPins[1].State;
-					PinState resetPin = chip.InputPins[2].State;
-					PinState writePin = chip.InputPins[3].State;
-					PinState refreshPin = chip.InputPins[4].State;
-					PinState clockPin = chip.InputPins[5].State;
+					uint addressPin = chip.InputPins[0].State;
+					uint pixelInputPin = chip.InputPins[1].State;
+					uint resetPin = chip.InputPins[2].State;
+					uint writePin = chip.InputPins[3].State;
+					uint refreshPin = chip.InputPins[4].State;
+					uint clockPin = chip.InputPins[5].State;
 
 					// Detect clock rising edge
-					bool clockHigh = clockPin.FirstBitHigh();
+					bool clockHigh = PinState.FirstBitHigh(clockPin);
 					bool isRisingEdge = clockHigh && chip.InternalState[^1] == 0;
 					chip.InternalState[^1] = clockHigh ? 1u : 0;
 
 					if (isRisingEdge)
 					{
 						// Clear back buffer
-						if (resetPin.FirstBitHigh())
+						if (PinState.FirstBitHigh(resetPin))
 						{
 							for (int i = 0; i < addressSpace; i++)
 							{
@@ -472,15 +536,15 @@ namespace DLS.Simulation
 							}
 						}
 						// Write to back-buffer
-						else if (writePin.FirstBitHigh())
+						else if (PinState.FirstBitHigh(writePin))
 						{
-							uint addressIndex = addressPin.GetRawBits() + addressSpace;
-							uint data = pixelInputPin.GetRawBits();
+							uint addressIndex = PinState.GetBitStates(addressPin) + addressSpace;
+							uint data = PinState.GetBitStates(pixelInputPin);
 							chip.InternalState[addressIndex] = data;
 						}
 
 						// Copy back-buffer to display buffer
-						if (refreshPin.FirstBitHigh())
+						if (PinState.FirstBitHigh(refreshPin))
 						{
 							for (int i = 0; i < addressSpace; i++)
 							{
@@ -490,52 +554,59 @@ namespace DLS.Simulation
 					}
 
 					// Output current pixel colour
-					uint pixelState = chip.InternalState[addressPin.GetRawBits()];
-					chip.OutputPins[0].State.SetAllBits_NoneDisconnected(pixelState);
+					ushort pixelState = (ushort)chip.InternalState[PinState.GetBitStates(addressPin)];
+					chip.OutputPins[0].State = pixelState;
 
 					break;
 				}
 				case ChipType.dev_Ram_8Bit:
 				{
-					PinState addressPin = chip.InputPins[0].State;
-					PinState dataPin = chip.InputPins[1].State;
-					PinState writeEnablePin = chip.InputPins[2].State;
-					PinState resetPin = chip.InputPins[3].State;
-					PinState clockPin = chip.InputPins[4].State;
+					uint addressPin = chip.InputPins[0].State;
+					uint dataPin = chip.InputPins[1].State;
+					uint writeEnablePin = chip.InputPins[2].State;
+					uint resetPin = chip.InputPins[3].State;
+					uint clockPin = chip.InputPins[4].State;
 
 					// Detect clock rising edge
-					bool clockHigh = clockPin.FirstBitHigh();
+					bool clockHigh = PinState.FirstBitHigh(clockPin);
 					bool isRisingEdge = clockHigh && chip.InternalState[^1] == 0;
 					chip.InternalState[^1] = clockHigh ? 1u : 0;
 
 					// Write/Reset on rising edge
 					if (isRisingEdge)
 					{
-						if (resetPin.FirstBitHigh())
+						if (PinState.FirstBitHigh(resetPin))
 						{
 							for (int i = 0; i < 256; i++)
 							{
 								chip.InternalState[i] = 0;
 							}
 						}
-						else if (writeEnablePin.FirstBitHigh())
+						else if (PinState.FirstBitHigh(writeEnablePin))
 						{
-							chip.InternalState[addressPin.GetRawBits()] = dataPin.GetRawBits();
+							chip.InternalState[PinState.GetBitStates(addressPin)] = PinState.GetBitStates(dataPin);
 						}
 					}
 
 					// Output data at current address
-					chip.OutputPins[0].State.SetAllBits_NoneDisconnected(chip.InternalState[addressPin.GetRawBits()]);
+					chip.OutputPins[0].State = (ushort)chip.InternalState[PinState.GetBitStates(addressPin)];
 
 					break;
 				}
 				case ChipType.Rom_256x16:
 				{
 					const int ByteMask = 0b11111111;
-					uint address = chip.InputPins[0].State.GetRawBits();
+					uint address = PinState.GetBitStates(chip.InputPins[0].State);
 					uint data = chip.InternalState[address];
-					chip.OutputPins[0].State.SetAllBits_NoneDisconnected((data >> 8) & ByteMask);
-					chip.OutputPins[1].State.SetAllBits_NoneDisconnected(data & ByteMask);
+					chip.OutputPins[0].State = (ushort)((data >> 8) & ByteMask);
+					chip.OutputPins[1].State = (ushort)(data & ByteMask);
+					break;
+				}
+				case ChipType.Buzzer:
+				{
+					int freqIndex = PinState.GetBitStates(chip.InputPins[0].State);
+					int volumeIndex = PinState.GetBitStates(chip.InputPins[1].State);
+					audioState.RegisterNote(freqIndex, (uint)volumeIndex);
 					break;
 				}
 				// ---- Bus types ----
@@ -544,9 +615,7 @@ namespace DLS.Simulation
 					if (ChipTypeHelper.IsBusOriginType(chip.ChipType))
 					{
 						SimPin inputPin = chip.InputPins[0];
-					
-						
-						chip.OutputPins[0].State.SetFromSource(inputPin.State);
+						PinState.Set(ref chip.OutputPins[0].State, inputPin.State);
 					}
 
 					break;
@@ -556,18 +625,17 @@ namespace DLS.Simulation
 
 		public static SimChip BuildSimChip(ChipDescription chipDesc, ChipLibrary library)
 		{
-			SubChipDescription subChipDescription = new(chipDesc.Name, -1, string.Empty, Vector2.zero, null);
-			return BuildSimChip(chipDesc, library, subChipDescription);
+			return BuildSimChip(chipDesc, library, -1, null);
 		}
 
-		public static SimChip BuildSimChip(ChipDescription chipDesc, ChipLibrary library, SubChipDescription selfSubChip)
+		public static SimChip BuildSimChip(ChipDescription chipDesc, ChipLibrary library, int subChipID, uint[] internalState)
 		{
-			SimChip simChip = BuildSimChipRecursive(chipDesc, library, selfSubChip);
+			SimChip simChip = BuildSimChipRecursive(chipDesc, library, subChipID, internalState);
 			return simChip;
 		}
 
 		// Recursively build full representation of chip from its description for simulation.
-		static SimChip BuildSimChipRecursive(ChipDescription chipDesc, ChipLibrary library, SubChipDescription selfSubChip)
+		static SimChip BuildSimChipRecursive(ChipDescription chipDesc, ChipLibrary library, int subChipID, uint[] internalState)
 		{
 			// Recursively create subchips
 			SimChip[] subchips = chipDesc.SubChips.Length == 0 ? Array.Empty<SimChip>() : new SimChip[chipDesc.SubChips.Length];
@@ -576,11 +644,11 @@ namespace DLS.Simulation
 			{
 				SubChipDescription subchipDesc = chipDesc.SubChips[i];
 				ChipDescription subchipFullDesc = library.GetChipDescription(subchipDesc.Name);
-				SimChip subChip = BuildSimChipRecursive(subchipFullDesc, library, subchipDesc);
+				SimChip subChip = BuildSimChipRecursive(subchipFullDesc, library, subchipDesc.ID, subchipDesc.InternalData);
 				subchips[i] = subChip;
 			}
 
-			SimChip simChip = new(chipDesc, selfSubChip, subchips);
+			SimChip simChip = new(chipDesc, subChipID, internalState, subchips);
 
 
 			// Create connections
@@ -592,13 +660,13 @@ namespace DLS.Simulation
 			return simChip;
 		}
 
-		public static void AddPin(SimChip simChip, int pinID, PinBitCount bitCount, bool isInputPin)
+		public static void AddPin(SimChip simChip, int pinID, bool isInputPin)
 		{
 			SimModifyCommand command = new()
 			{
 				type = SimModifyCommand.ModificationType.AddPin,
 				modifyTarget = simChip,
-				simPinToAdd = new SimPin(pinID, bitCount, isInputPin, simChip),
+				simPinToAdd = new SimPin(pinID, isInputPin, simChip),
 				pinIsInputPin = isInputPin
 			};
 			modificationQueue.Enqueue(command);
@@ -615,7 +683,7 @@ namespace DLS.Simulation
 			modificationQueue.Enqueue(command);
 		}
 
-		public static void AddSubChip(SimChip simChip, ChipDescription desc, ChipLibrary chipLibrary, SubChipDescription subChipDesc)
+		public static void AddSubChip(SimChip simChip, ChipDescription desc, ChipLibrary chipLibrary, int subChipID, uint[] subChipInternalData)
 		{
 			SimModifyCommand command = new()
 			{
@@ -623,7 +691,8 @@ namespace DLS.Simulation
 				modifyTarget = simChip,
 				chipDesc = desc,
 				lib = chipLibrary,
-				subChipDesc = subChipDesc
+				subChipID = subChipID,
+				subChipInternalData = subChipInternalData
 			};
 			modificationQueue.Enqueue(command);
 		}
@@ -674,7 +743,7 @@ namespace DLS.Simulation
 				{
 					if (cmd.type == SimModifyCommand.ModificationType.AddSubchip)
 					{
-						SimChip newSubChip = BuildSimChip(cmd.chipDesc, cmd.lib, cmd.subChipDesc);
+						SimChip newSubChip = BuildSimChip(cmd.chipDesc, cmd.lib, cmd.subChipID, cmd.subChipInternalData);
 						cmd.modifyTarget.AddSubChip(newSubChip);
 					}
 					else if (cmd.type == SimModifyCommand.ModificationType.RemoveSubChip)
@@ -705,6 +774,8 @@ namespace DLS.Simulation
 		{
 			simulationFrame = 0;
 			modificationQueue?.Clear();
+			stopwatch.Restart();
+			elapsedSecondsOld = 0;
 		}
 
 		struct SimModifyCommand
@@ -723,7 +794,8 @@ namespace DLS.Simulation
 			public SimChip modifyTarget;
 			public ChipDescription chipDesc;
 			public ChipLibrary lib;
-			public SubChipDescription subChipDesc;
+			public int subChipID;
+			public uint[] subChipInternalData;
 			public PinAddress sourcePinAddress;
 			public PinAddress targetPinAddress;
 			public SimPin simPinToAdd;

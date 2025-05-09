@@ -25,6 +25,12 @@ namespace DLS.Game
 				CreateInputOrOutputPin(ChipType.Out_16Bit),
 				CreateInputOrOutputPin(ChipType.In_32Bit),
 				CreateInputOrOutputPin(ChipType.Out_32Bit),
+				CreateInputOrOutputPin(ChipType.In_64Bit),
+				CreateInputOrOutputPin(ChipType.Out_64Bit),
+				CreateInputOrOutputPin(ChipType.In_128Bit),
+				CreateInputOrOutputPin(ChipType.Out_128Bit),
+				CreateInputOrOutputPin(ChipType.In_256Bit),
+				CreateInputOrOutputPin(ChipType.Out_256Bit),
 				
 
 				CreateInputKeyChip(),
@@ -32,51 +38,91 @@ namespace DLS.Game
 				CreateNand(),
 				CreateTristateBuffer(),
 				CreateClock(),
+				CreatePulse(),
 				// ---- Memory ----
 				dev_CreateRAM_8(),
 				CreateROM_8(),
 				// ---- Merge / Split ----
-				CreateBitConversionChip(ChipType.Split_4To1Bit, PinBitCount.Bit4, PinBitCount.Bit1, 1, 4),
-				CreateBitConversionChip(ChipType.Split_8To4Bit, PinBitCount.Bit8, PinBitCount.Bit4, 1, 2),
-				CreateBitConversionChip(ChipType.Split_8To1Bit, PinBitCount.Bit8, PinBitCount.Bit1, 1, 8),
-
-				CreateBitConversionChip(ChipType.Merge_1To8Bit, PinBitCount.Bit1, PinBitCount.Bit8, 8, 1),
-				CreateBitConversionChip(ChipType.Merge_1To4Bit, PinBitCount.Bit1, PinBitCount.Bit4, 4, 1),
-				CreateBitConversionChip(ChipType.Merge_4To8Bit, PinBitCount.Bit4, PinBitCount.Bit8, 2, 1),
-
-
-				CreateBitConversionChip(ChipType.Split_16To8Bit, PinBitCount.Bit16, PinBitCount.Bit8,   1,  2),
-				CreateBitConversionChip(ChipType.Split_16To4Bit, PinBitCount.Bit16, PinBitCount.Bit4,   1,  4),
-				CreateBitConversionChip(ChipType.Split_16To1Bit, PinBitCount.Bit16, PinBitCount.Bit1,   1, 16),
-				CreateBitConversionChip(ChipType.Merge_8To16Bit, PinBitCount.Bit8, PinBitCount.Bit16,   2 ,1),
-				CreateBitConversionChip(ChipType.Merge_4To16Bit, PinBitCount.Bit4, PinBitCount.Bit16,   4 ,1),
-				CreateBitConversionChip(ChipType.Merge_1To16Bit, PinBitCount.Bit1, PinBitCount.Bit16,   16,  1),
-				CreateBitConversionChip(ChipType.Split_32To1Bit, PinBitCount.Bit32, PinBitCount.Bit1,   1,  32),
-				CreateBitConversionChip(ChipType.Split_32To4Bit, PinBitCount.Bit32, PinBitCount.Bit4,   1,  8),
-				CreateBitConversionChip(ChipType.Split_32To8Bit, PinBitCount.Bit32, PinBitCount.Bit8,   1,  4),
-				CreateBitConversionChip(ChipType.Split_32To16Bit, PinBitCount.Bit32, PinBitCount.Bit16, 1,  2),
-				CreateBitConversionChip(ChipType.Merge_1To32Bit, PinBitCount.Bit1, PinBitCount.Bit32,   32 ,1),
-				CreateBitConversionChip(ChipType.Merge_4To32Bit, PinBitCount.Bit4, PinBitCount.Bit32,   8,  1),
-				CreateBitConversionChip(ChipType.Merge_8To32Bit, PinBitCount.Bit8, PinBitCount.Bit32,   4,  1),
-				CreateBitConversionChip(ChipType.Merge_16To32Bit, PinBitCount.Bit16, PinBitCount.Bit32, 2,  1),
-
+				CreateBitConversionChip(ChipType.Split_4To1Bit, PinBitCount.Bit4, PinBitCount.Bit1, 1, 4},
+				CreateBitConversionChip(ChipType.Split_8To1Bit, PinBitCount.Bit8, PinBitCount.Bit1, 1, 8},
+				CreateBitConversionChip(ChipType.Split_16To1Bit, PinBitCount.Bit16, PinBitCount.Bit1, 1, 16},
+				CreateBitConversionChip(ChipType.Split_32To1Bit, PinBitCount.Bit32, PinBitCount.Bit1, 1, 32},
+				CreateBitConversionChip(ChipType.Split_64To1Bit, PinBitCount.Bit64, PinBitCount.Bit1, 1, 64},
+				CreateBitConversionChip(ChipType.Split_128To1Bit, PinBitCount.Bit128, PinBitCount.Bit1, 1, 128},
+				CreateBitConversionChip(ChipType.Split_256To1Bit, PinBitCount.Bit256, PinBitCount.Bit1, 1, 256},
+				CreateBitConversionChip(ChipType.Split_8To4Bit, PinBitCount.Bit8, PinBitCount.Bit4, 1, 2},
+				CreateBitConversionChip(ChipType.Split_16To4Bit, PinBitCount.Bit16, PinBitCount.Bit4, 1, 4},
+				CreateBitConversionChip(ChipType.Split_32To4Bit, PinBitCount.Bit32, PinBitCount.Bit4, 1, 8},
+				CreateBitConversionChip(ChipType.Split_64To4Bit, PinBitCount.Bit64, PinBitCount.Bit4, 1, 16},
+				CreateBitConversionChip(ChipType.Split_128To4Bit, PinBitCount.Bit128, PinBitCount.Bit4, 1, 32},
+				CreateBitConversionChip(ChipType.Split_256To4Bit, PinBitCount.Bit256, PinBitCount.Bit4, 1, 64},
+				CreateBitConversionChip(ChipType.Split_16To8Bit, PinBitCount.Bit16, PinBitCount.Bit8, 1, 2},
+				CreateBitConversionChip(ChipType.Split_32To8Bit, PinBitCount.Bit32, PinBitCount.Bit8, 1, 4},
+				CreateBitConversionChip(ChipType.Split_64To8Bit, PinBitCount.Bit64, PinBitCount.Bit8, 1, 8},
+				CreateBitConversionChip(ChipType.Split_128To8Bit, PinBitCount.Bit128, PinBitCount.Bit8, 1, 16},
+				CreateBitConversionChip(ChipType.Split_256To8Bit, PinBitCount.Bit256, PinBitCount.Bit8, 1, 32},
+				CreateBitConversionChip(ChipType.Split_32To16Bit, PinBitCount.Bit32, PinBitCount.Bit16, 1, 2},
+				CreateBitConversionChip(ChipType.Split_64To16Bit, PinBitCount.Bit64, PinBitCount.Bit16, 1, 4},
+				CreateBitConversionChip(ChipType.Split_128To16Bit, PinBitCount.Bit128, PinBitCount.Bit16, 1, 8},
+				CreateBitConversionChip(ChipType.Split_256To16Bit, PinBitCount.Bit256, PinBitCount.Bit16, 1, 16},
+				CreateBitConversionChip(ChipType.Split_64To32Bit, PinBitCount.Bit64, PinBitCount.Bit32, 1, 2},
+				CreateBitConversionChip(ChipType.Split_128To32Bit, PinBitCount.Bit128, PinBitCount.Bit32, 1, 4},
+				CreateBitConversionChip(ChipType.Split_256To32Bit, PinBitCount.Bit256, PinBitCount.Bit32, 1, 8},
+				CreateBitConversionChip(ChipType.Split_128To64Bit, PinBitCount.Bit128, PinBitCount.Bit64, 1, 2},
+				CreateBitConversionChip(ChipType.Split_256To64Bit, PinBitCount.Bit256, PinBitCount.Bit64, 1, 4},
+				CreateBitConversionChip(ChipType.Split_256To128Bit, PinBitCount.Bit256, PinBitCount.Bit128, 1, 2},
+				CreateBitConversionChip(ChipType.Merge_128To256Bit, PinBitCount.Bit128, PinBitCount.Bit256, 2, 1},
+				CreateBitConversionChip(ChipType.Merge_64To256Bit, PinBitCount.Bit64, PinBitCount.Bit256, 4, 1},
+				CreateBitConversionChip(ChipType.Merge_64To128Bit, PinBitCount.Bit64, PinBitCount.Bit128, 2, 1},
+				CreateBitConversionChip(ChipType.Merge_32To256Bit, PinBitCount.Bit32, PinBitCount.Bit256, 8, 1},
+				CreateBitConversionChip(ChipType.Merge_32To128Bit, PinBitCount.Bit32, PinBitCount.Bit128, 4, 1},
+				CreateBitConversionChip(ChipType.Merge_32To64Bit, PinBitCount.Bit32, PinBitCount.Bit64, 2, 1},
+				CreateBitConversionChip(ChipType.Merge_16To256Bit, PinBitCount.Bit16, PinBitCount.Bit256, 16, 1},
+				CreateBitConversionChip(ChipType.Merge_16To128Bit, PinBitCount.Bit16, PinBitCount.Bit128, 8, 1},
+				CreateBitConversionChip(ChipType.Merge_16To64Bit, PinBitCount.Bit16, PinBitCount.Bit64, 4, 1},
+				CreateBitConversionChip(ChipType.Merge_16To32Bit, PinBitCount.Bit16, PinBitCount.Bit32, 2, 1},
+				CreateBitConversionChip(ChipType.Merge_8To256Bit, PinBitCount.Bit8, PinBitCount.Bit256, 32, 1},
+				CreateBitConversionChip(ChipType.Merge_8To128Bit, PinBitCount.Bit8, PinBitCount.Bit128, 16, 1},
+				CreateBitConversionChip(ChipType.Merge_8To64Bit, PinBitCount.Bit8, PinBitCount.Bit64, 8, 1},
+				CreateBitConversionChip(ChipType.Merge_8To32Bit, PinBitCount.Bit8, PinBitCount.Bit32, 4, 1},
+				CreateBitConversionChip(ChipType.Merge_8To16Bit, PinBitCount.Bit8, PinBitCount.Bit16, 2, 1},
+				CreateBitConversionChip(ChipType.Merge_4To256Bit, PinBitCount.Bit4, PinBitCount.Bit256, 64, 1},
+				CreateBitConversionChip(ChipType.Merge_4To128Bit, PinBitCount.Bit4, PinBitCount.Bit128, 32, 1},
+				CreateBitConversionChip(ChipType.Merge_4To64Bit, PinBitCount.Bit4, PinBitCount.Bit64, 16, 1},
+				CreateBitConversionChip(ChipType.Merge_4To32Bit, PinBitCount.Bit4, PinBitCount.Bit32, 8, 1},
+				CreateBitConversionChip(ChipType.Merge_4To16Bit, PinBitCount.Bit4, PinBitCount.Bit16, 4, 1},
+				CreateBitConversionChip(ChipType.Merge_4To8Bit, PinBitCount.Bit4, PinBitCount.Bit8, 2, 1},
+				CreateBitConversionChip(ChipType.Merge_1To256Bit, PinBitCount.Bit1, PinBitCount.Bit256, 256, 1},
+				CreateBitConversionChip(ChipType.Merge_1To128Bit, PinBitCount.Bit1, PinBitCount.Bit128, 128, 1},
+				CreateBitConversionChip(ChipType.Merge_1To64Bit, PinBitCount.Bit1, PinBitCount.Bit64, 64, 1},
+				CreateBitConversionChip(ChipType.Merge_1To32Bit, PinBitCount.Bit1, PinBitCount.Bit32, 32, 1},
+				CreateBitConversionChip(ChipType.Merge_1To16Bit, PinBitCount.Bit1, PinBitCount.Bit16, 16, 1},
+				CreateBitConversionChip(ChipType.Merge_1To8Bit, PinBitCount.Bit1, PinBitCount.Bit8, 8, 1},
+				CreateBitConversionChip(ChipType.Merge_1To4Bit, PinBitCount.Bit1, PinBitCount.Bit4, 4, 1},
 				// ---- Displays ----
 				CreateDisplay7Seg(),
 				CreateDisplayRGB(),
 				CreateDisplayDot(),
 				CreateDisplayLED(),
-				// a
 				// ---- Bus ----
-				CreateBus(		  PinBitCount.Bit1),
+				CreateBus(PinBitCount.Bit1),
+				CreateBus(PinBitCount.Bit4),
+				CreateBus(PinBitCount.Bit8),
+				CreateBus(PinBitCount.Bit16),
+				CreateBus(PinBitCount.Bit32),
+				CreateBus(PinBitCount.Bit64),
+				CreateBus(PinBitCount.Bit128),
+				CreateBus(PinBitCount.Bit256),
 				CreateBusTerminus(PinBitCount.Bit1),
-				CreateBus(		  PinBitCount.Bit4),
 				CreateBusTerminus(PinBitCount.Bit4),
-				CreateBus(		  PinBitCount.Bit8),
 				CreateBusTerminus(PinBitCount.Bit8),
-				CreateBus(		  PinBitCount.Bit16),
 				CreateBusTerminus(PinBitCount.Bit16),
-				CreateBus(		  PinBitCount.Bit32),
-				CreateBusTerminus(PinBitCount.Bit32)
+				CreateBusTerminus(PinBitCount.Bit32),
+				CreateBusTerminus(PinBitCount.Bit64),
+				CreateBusTerminus(PinBitCount.Bit128),
+				CreateBusTerminus(PinBitCount.Bit256)
+				// ---- Audio ----
+				CreateBuzzer()
 			};
 		}
 
@@ -88,7 +134,23 @@ namespace DLS.Game
 			PinDescription[] inputPins = { CreatePinDescription("IN B", 0), CreatePinDescription("IN A", 1) };
 			PinDescription[] outputPins = { CreatePinDescription("OUT", 2) };
 
-			return CreateBuiltinChipDesciption(ChipType.Nand, size, col, inputPins, outputPins);
+			return CreateBuiltinChipDescription(ChipType.Nand, size, col, inputPins, outputPins);
+		}
+
+		static ChipDescription CreateBuzzer()
+		{
+			Color col = new(0, 0, 0);
+
+			PinDescription[] inputPins =
+			{
+				CreatePinDescription("PITCH", 1, PinBitCount.Bit8),
+				CreatePinDescription("VOLUME", 0, PinBitCount.Bit4),
+			};
+
+			float height = SubChipInstance.MinChipHeightForPins(inputPins, null);
+			Vector2 size = new(CalculateGridSnappedWidth(GridSize * 9), height);
+
+			return CreateBuiltinChipDescription(ChipType.Buzzer, size, col, inputPins, null, null);
 		}
 
 		static ChipDescription dev_CreateRAM_8()
@@ -106,7 +168,7 @@ namespace DLS.Game
 			PinDescription[] outputPins = { CreatePinDescription("OUT", 5, PinBitCount.Bit8) };
 			Vector2 size = new(GridSize * 10, SubChipInstance.MinChipHeightForPins(inputPins, outputPins));
 
-			return CreateBuiltinChipDesciption(ChipType.dev_Ram_8Bit, size, col, inputPins, outputPins);
+			return CreateBuiltinChipDescription(ChipType.dev_Ram_8Bit, size, col, inputPins, outputPins);
 		}
 
 		static ChipDescription CreateROM_8()
@@ -124,7 +186,7 @@ namespace DLS.Game
 			Color col = new(0.25f, 0.35f, 0.5f);
 			Vector2 size = new(GridSize * 12, SubChipInstance.MinChipHeightForPins(inputPins, outputPins));
 
-			return CreateBuiltinChipDesciption(ChipType.Rom_256x16, size, col, inputPins, outputPins);
+			return CreateBuiltinChipDescription(ChipType.Rom_256x16, size, col, inputPins, outputPins);
 		}
 
 		static ChipDescription CreateInputKeyChip()
@@ -134,7 +196,7 @@ namespace DLS.Game
 
 			PinDescription[] outputPins = { CreatePinDescription("OUT", 0) };
 
-			return CreateBuiltinChipDesciption(ChipType.Key, size, col, null, outputPins, hideName: true);
+			return CreateBuiltinChipDescription(ChipType.Key, size, col, null, outputPins, null, NameDisplayLocation.Hidden);
 		}
 
 
@@ -146,7 +208,7 @@ namespace DLS.Game
 			PinDescription[] inputPins = { CreatePinDescription("IN", 0), CreatePinDescription("ENABLE", 1) };
 			PinDescription[] outputPins = { CreatePinDescription("OUT", 2) };
 
-			return CreateBuiltinChipDesciption(ChipType.TriStateBuffer, size, col, inputPins, outputPins);
+			return CreateBuiltinChipDescription(ChipType.TriStateBuffer, size, col, inputPins, outputPins);
 		}
 
 		static ChipDescription CreateClock()
@@ -155,7 +217,17 @@ namespace DLS.Game
 			Color col = new(0.1f, 0.1f, 0.1f);
 			PinDescription[] outputPins = { CreatePinDescription("CLK", 0) };
 
-			return CreateBuiltinChipDesciption(ChipType.Clock, size, col, null, outputPins);
+			return CreateBuiltinChipDescription(ChipType.Clock, size, col, null, outputPins);
+		}
+
+		static ChipDescription CreatePulse()
+		{
+			Vector2 size = new(GridHelper.SnapToGrid(1), GridSize * 3);
+			Color col = new(0.1f, 0.1f, 0.1f);
+			PinDescription[] inputPins = { CreatePinDescription("IN", 0) };
+			PinDescription[] outputPins = { CreatePinDescription("PULSE", 1) };
+
+			return CreateBuiltinChipDescription(ChipType.Pulse, size, col, inputPins, outputPins);
 		}
 
 		static ChipDescription CreateBitConversionChip(ChipType chipType, PinBitCount bitCountIn, PinBitCount bitCountOut, int numIn, int numOut)
@@ -178,7 +250,7 @@ namespace DLS.Game
 			float height = SubChipInstance.MinChipHeightForPins(inputPins, outputPins);
 			Vector2 size = new(GridSize * 9, height);
 
-			return CreateBuiltinChipDesciption(chipType, size, ChipCol_SplitMerge, inputPins, outputPins);
+			return CreateBuiltinChipDescription(chipType, size, ChipCol_SplitMerge, inputPins, outputPins);
 		}
 
 		static string GetPinName(int pinIndex, int pinCount, bool isInput)
@@ -211,12 +283,12 @@ namespace DLS.Game
 			{
 				new()
 				{
-					Position = Vector2.right * PinRadius / 3 * 0,
+					Position = Vector2.zero,
 					Scale = displayWidth,
 					SubChipID = -1
 				}
 			};
-			return CreateBuiltinChipDesciption(ChipType.SevenSegmentDisplay, size, col, inputPins, null, displays, true);
+			return CreateBuiltinChipDescription(ChipType.SevenSegmentDisplay, size, col, inputPins, null, displays, NameDisplayLocation.Hidden);
 		}
 
 		static ChipDescription CreateDisplayRGB()
@@ -251,13 +323,13 @@ namespace DLS.Game
 			{
 				new()
 				{
-					Position = Vector2.right * PinRadius / 3 * 0,
+					Position = Vector2.zero,
 					Scale = displayWidth,
 					SubChipID = -1
 				}
 			};
 
-			return CreateBuiltinChipDesciption(ChipType.DisplayRGB, size, col, inputPins, outputPins, displays, true);
+			return CreateBuiltinChipDescription(ChipType.DisplayRGB, size, col, inputPins, outputPins, displays, NameDisplayLocation.Hidden);
 		}
 
 		static ChipDescription CreateDisplayDot()
@@ -289,13 +361,13 @@ namespace DLS.Game
 			{
 				new()
 				{
-					Position = Vector2.right * PinRadius / 3 * 0,
+					Position = Vector2.zero,
 					Scale = displayWidth,
 					SubChipID = -1
 				}
 			};
 
-			return CreateBuiltinChipDesciption(ChipType.DisplayDot, size, col, inputPins, outputPins, displays, true);
+			return CreateBuiltinChipDescription(ChipType.DisplayDot, size, col, inputPins, outputPins, displays, NameDisplayLocation.Hidden);
 		}
 
 		// (Not a chip, but convenient to treat it as one)
@@ -308,7 +380,7 @@ namespace DLS.Game
 			PinDescription[] inputs = isInput ? pin : null;
 			PinDescription[] outputs = isOutput ? pin : null;
 
-			return CreateBuiltinChipDesciption(type, Vector2.zero, Color.clear, inputs, outputs);
+			return CreateBuiltinChipDescription(type, Vector2.zero, Color.clear, inputs, outputs);
 		}
 
 		static Vector2 BusChipSize(PinBitCount bitCount)
@@ -320,6 +392,9 @@ namespace DLS.Game
 				PinBitCount.Bit8 => new Vector2(GridSize * 2, GridSize * 4),
 				PinBitCount.Bit16 => new Vector2(GridSize * 2, GridSize * 5),
 				PinBitCount.Bit32 => new Vector2(GridSize * 2, GridSize * 6),
+				PinBitCount.Bit64 => new Vector2(GridSize * 2, GridSize * 7),
+				PinBitCount.Bit128 => new Vector2(GridSize * 2, GridSize * 8),
+				PinBitCount.Bit256 => new Vector2(GridSize * 2, GridSize * 9),
 				_ => throw new Exception("Bus bit count not implemented")
 			};
 		}
@@ -333,6 +408,9 @@ namespace DLS.Game
 				PinBitCount.Bit8 => ChipType.Bus_8Bit,
 				PinBitCount.Bit16 => ChipType.Bus_16Bit,
 				PinBitCount.Bit32 => ChipType.Bus_32Bit,
+				PinBitCount.Bit64 => ChipType.Bus_64Bit,
+				PinBitCount.Bit128 => ChipType.Bus_128Bit,
+				PinBitCount.Bit256 => ChipType.Bus_256Bit,
 				_ => throw new Exception("Bus bit count not implemented")
 			};
 
@@ -343,7 +421,7 @@ namespace DLS.Game
 
 			Color col = new(0.1f, 0.1f, 0.1f);
 
-			return CreateBuiltinChipDesciption(type, BusChipSize(bitCount), col, inputs, outputs, hideName: true);
+			return CreateBuiltinChipDescription(type, BusChipSize(bitCount), col, inputs, outputs, null, NameDisplayLocation.Hidden);
 		}
 
 		static ChipDescription CreateDisplayLED()
@@ -365,14 +443,15 @@ namespace DLS.Game
 			{
 				new()
 				{
-					Position = Vector2.right * PinRadius / 3 * 0,
+					Position = Vector2.zero,
 					Scale = displayWidth,
 					SubChipID = -1
 				}
 			};
 
-			return CreateBuiltinChipDesciption(ChipType.DisplayLED, size, col, inputPins, null, displays, true);
+			return CreateBuiltinChipDescription(ChipType.DisplayLED, size, col, inputPins, null, displays, NameDisplayLocation.Hidden);
 		}
+
 
 
 
@@ -385,16 +464,20 @@ namespace DLS.Game
 				PinBitCount.Bit8 => ChipType.BusTerminus_8Bit,
 				PinBitCount.Bit16 => ChipType.BusTerminus_16Bit,
 				PinBitCount.Bit32 => ChipType.BusTerminus_32Bit,
+				PinBitCount.Bit64 => ChipType.BusTerminus_64Bit,
+				PinBitCount.Bit128 => ChipType.BusTerminus_128Bit,
+				PinBitCount.Bit256 => ChipType.BusTerminus_256Bit,
 				_ => throw new Exception("Bus bit count not implemented")
 			};
 
 			ChipDescription busOrigin = CreateBus(bitCount);
 			PinDescription[] inputs = { CreatePinDescription(busOrigin.Name, 0, bitCount) };
 
-			return CreateBuiltinChipDesciption(type, BusChipSize(bitCount), busOrigin.Colour, inputs, hideName: true);
+			return CreateBuiltinChipDescription(type, BusChipSize(bitCount), busOrigin.Colour, inputs, null, null, NameDisplayLocation.Hidden);
 		}
 
-		static ChipDescription CreateBuiltinChipDesciption(ChipType type, Vector2 size, Color col, PinDescription[] inputs = null, PinDescription[] outputs = null, DisplayDescription[] displays = null, bool hideName = false)
+
+		static ChipDescription CreateBuiltinChipDescription(ChipType type, Vector2 size, Color col, PinDescription[] inputs, PinDescription[] outputs, DisplayDescription[] displays = null, NameDisplayLocation nameLoc = NameDisplayLocation.Centre)
 		{
 			string name = ChipTypeHelper.GetName(type);
 			ValidatePinIDs(inputs, outputs, name);
@@ -402,7 +485,7 @@ namespace DLS.Game
 			return new ChipDescription
 			{
 				Name = name,
-				NameLocation = hideName ? NameDisplayLocation.Hidden : NameDisplayLocation.Centre,
+				NameLocation = nameLoc,
 				Colour = col,
 				Size = new Vector2(size.x, size.y),
 				InputPins = inputs ?? Array.Empty<PinDescription>(),
